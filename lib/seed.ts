@@ -1,11 +1,5 @@
 import { Store } from "./types";
 
-let counter = 100;
-export function nextId(prefix: string): string {
-  counter += 1;
-  return `${prefix}_${counter}`;
-}
-
 export function seedStore(): Store {
   return {
     parents: [
@@ -22,10 +16,10 @@ export function seedStore(): Store {
       { id: "c5", name: "Ida Schmidt", parentId: "p1" },
     ],
     trainings: [
-      { id: "t1", name: "Fußball U10", weekday: 2, startTime: "16:00", endTime: "17:30", location: "Sportpark Nord", teamName: "U10" },
-      { id: "t2", name: "Schwimmen Jugend", weekday: 2, startTime: "16:30", endTime: "18:00", location: "Hallenbad Mitte", teamName: "Jugend" },
-      { id: "t3", name: "Handball U12", weekday: 4, startTime: "17:00", endTime: "18:30", location: "Sporthalle Ost", teamName: "U12" },
-      { id: "t4", name: "Tennis Kids", weekday: 5, startTime: "15:00", endTime: "16:00", location: "Tennisclub West", teamName: "Kids" },
+      { id: "t1", name: "Fußball U10", weekday: 2, startTime: "16:00", endTime: "17:30", location: "Sportpark Nord" },
+      { id: "t2", name: "Schwimmen Jugend", weekday: 2, startTime: "16:30", endTime: "18:00", location: "Hallenbad Mitte" },
+      { id: "t3", name: "Handball U12", weekday: 4, startTime: "17:00", endTime: "18:30", location: "Sporthalle Ost" },
+      { id: "t4", name: "Tennis Kids", weekday: 5, startTime: "15:00", endTime: "16:00", location: "Tennisclub West" },
     ],
     enrollments: [
       { childId: "c1", trainingId: "t1" },

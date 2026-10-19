@@ -1,129 +1,171 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Conflict, Store } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { autoAssignDrivers, findConflicts, weekdayName } from "@/lib/planner";
+import { seedStore } from "@/lib/seed";
+import { Store, Unassigned } from "@/lib/types";
+import { newId, useStore } from "@/lib/useStore";
 
 const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 export default function Home() {
+  const { store: storedStore, persist, loaded, reset } = useStore();
   const [store, setStore] = useState<Store | null>(null);
-  const [conflicts, setConflicts] = useState<Conflict[]>([]);
-  const [unassigned, setUnassigned] = useState<
-    { childId: string; trainingId: string; reason: string }[]
-  >([]);
+  const [unassigned, setUnassigned] = useState<Unassigned[]>([]);
   const [msg, setMsg] = useState("");
 
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/store");
-    const data: Store = await res.json();
-    setStore(data);
-    const planRes = await fetch("/api/plan");
-    const planData = await planRes.json();
-    setConflicts(planData.conflicts ?? []);
-  }, []);
-
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (loaded) {
+      setStore(storedStore ?? seedStore());
+    }
+  }, [loaded, storedStore]);
 
-  async function api(path: string, init?: RequestInit) {
-    const res = await fetch(path, init);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setMsg(data.error ?? "Fehler");
-      return null;
+  const save = useCallback(
+    (next: Store) => {
+      setStore(next);
+      persist(next);
+    },
+    [persist]
+  );
+
+  const conflicts = useMemo(
+    () => (store ? findConflicts(store) : []),
+    [store]
+  );
+
+  const s: Store = store ?? seedStore();
+
+  const childById = new Map(s.children.map((c) => [c.id, c]));
+  const parentById = new Map(s.parents.map((p) => [p.id, p]));
+  const trainingById = new Map(s.trainings.map((t) => [t.id, t]));
+
+  function requireFields(form: FormData, keys: string[]): Record<string, string> | null {
+    const values: Record<string, string> = {};
+    for (const k of keys) {
+      const v = String(form.get(k) ?? "").trim();
+      if (!v) {
+        setMsg("Bitte alle Pflichtfelder ausfüllen.");
+        return null;
+      }
+      values[k] = v;
     }
     setMsg("");
-    return res.json();
+    return values;
   }
 
-  async function addParent(e: React.FormEvent<HTMLFormElement>) {
+  function addParent(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const data = await api("/api/parent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.get("name"), phone: form.get("phone") }),
+    const v = requireFields(form, ["name"]);
+    if (!v) return;
+    save({
+      ...s,
+      parents: [...s.parents, { id: newId("p"), name: v.name, phone: String(form.get("phone") ?? "") || undefined }],
     });
-    if (data) setStore(data);
     e.currentTarget.reset();
   }
 
-  async function addChild(e: React.FormEvent<HTMLFormElement>) {
+  function addChild(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const data = await api("/api/child", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.get("name"), parentId: form.get("parentId") }),
-    });
-    if (data) setStore(data);
+    const v = requireFields(form, ["name", "parentId"]);
+    if (!v) return;
+    save({ ...s, children: [...s.children, { id: newId("c"), name: v.name, parentId: v.parentId }] });
     e.currentTarget.reset();
   }
 
-  async function addTraining(e: React.FormEvent<HTMLFormElement>) {
+  function addTraining(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const data = await api("/api/training", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        weekday: form.get("weekday"),
-        startTime: form.get("startTime"),
-        endTime: form.get("endTime"),
-        location: form.get("location"),
-      }),
+    const v = requireFields(form, ["name", "weekday", "startTime", "endTime"]);
+    if (!v) return;
+    if (v.startTime >= v.endTime) {
+      setMsg("Endzeit muss nach der Startzeit liegen.");
+      return;
+    }
+    save({
+      ...s,
+      trainings: [
+        ...s.trainings,
+        {
+          id: newId("t"),
+          name: v.name,
+          weekday: Number(v.weekday),
+          startTime: v.startTime,
+          endTime: v.endTime,
+          location: String(form.get("location") ?? ""),
+        },
+      ],
     });
-    if (data) setStore(data);
     e.currentTarget.reset();
   }
 
-  async function toggleEnrollment(childId: string, trainingId: string, enrolled: boolean) {
-    if (enrolled) {
-      const data = await api(
-        `/api/enrollment?childId=${childId}&trainingId=${trainingId}`,
-        { method: "DELETE" }
-      );
-      if (data) setStore(data);
-    } else {
-      const data = await api("/api/enrollment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId, trainingId }),
+  function remove(kind: "parent" | "child" | "training", id: string) {
+    if (kind === "parent") {
+      const childIds = s.children.filter((c) => c.parentId === id).map((c) => c.id);
+      save({
+        ...s,
+        parents: s.parents.filter((p) => p.id !== id),
+        children: s.children.filter((c) => c.parentId !== id),
+        enrollments: s.enrollments.filter((e) => !childIds.includes(e.childId)),
+        plan: s.plan
+          .filter((a) => a.driverId !== id)
+          .map((a) => ({ ...a, passengerChildIds: a.passengerChildIds.filter((c) => !childIds.includes(c)) })),
       });
-      if (data) setStore(data);
+    } else if (kind === "child") {
+      save({
+        ...s,
+        children: s.children.filter((c) => c.id !== id),
+        enrollments: s.enrollments.filter((e) => e.childId !== id),
+        plan: s.plan.map((a) => ({
+          ...a,
+          passengerChildIds: a.passengerChildIds.filter((c) => c !== id),
+        })),
+      });
+    } else {
+      save({
+        ...s,
+        trainings: s.trainings.filter((t) => t.id !== id),
+        enrollments: s.enrollments.filter((e) => e.trainingId !== id),
+        plan: s.plan.filter((a) => a.trainingId !== id),
+      });
     }
   }
 
-  async function autoPlan() {
-    const data = await api("/api/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "auto" }),
+  function toggleEnrollment(childId: string, trainingId: string) {
+    const enrolled = s.enrollments.some(
+      (e) => e.childId === childId && e.trainingId === trainingId
+    );
+    save({
+      ...s,
+      enrollments: enrolled
+        ? s.enrollments.filter((e) => !(e.childId === childId && e.trainingId === trainingId))
+        : [...s.enrollments, { childId, trainingId }],
     });
-    if (data) {
-      setStore((s) => (s ? { ...s, plan: data.plan } : s));
-      setConflicts(data.conflicts ?? []);
-      setUnassigned(data.unassigned ?? []);
-    }
   }
 
-  if (!store) {
-    return <main className="p-8">Lade ...</main>;
+  function autoPlan() {
+    const { plan, unassigned: una } = autoAssignDrivers(s);
+    save({ ...s, plan });
+    setUnassigned(una);
   }
-
-  const childById = new Map(store.children.map((c) => [c.id, c]));
-  const parentById = new Map(store.parents.map((p) => [p.id, p]));
-  const trainingById = new Map(store.trainings.map((t) => [t.id, t]));
 
   return (
     <main className="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold">🚗 Fahrgemeinschafts-Planer</h1>
-        <p className="text-slate-600">
-          Plant gemeinsame Fahrten zum Training – keiner fährt allein, wenn es sich vermeiden lässt.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">🚗 Fahrgemeinschafts-Planer</h1>
+          <p className="text-slate-600">
+            Plant gemeinsame Fahrten zum Training – die Daten bleiben lokal in eurem Browser.
+          </p>
+        </div>
+        <button
+          onClick={reset}
+          className="text-sm text-slate-500 hover:text-red-600 hover:underline shrink-0"
+          title="Alle Daten löschen und Beispieldaten neu laden"
+        >
+          Zurücksetzen
+        </button>
       </header>
 
       {msg && (
@@ -134,18 +176,12 @@ export default function Home() {
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">Elternteile</h2>
           <ul className="mb-3 space-y-1">
-            {store.parents.map((p) => (
+            {s.parents.map((p) => (
               <li key={p.id} className="flex justify-between text-sm">
                 <span>
                   {p.name} {p.phone && <span className="text-slate-400">({p.phone})</span>}
                 </span>
-                <button
-                  className="text-red-500 hover:underline"
-                  onClick={async () => {
-                    const data = await api(`/api/parent?id=${p.id}`, { method: "DELETE" });
-                    if (data) setStore(data);
-                  }}
-                >
+                <button className="text-red-500 hover:underline" onClick={() => remove("parent", p.id)}>
                   löschen
                 </button>
               </li>
@@ -163,21 +199,13 @@ export default function Home() {
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">Kinder</h2>
           <ul className="mb-3 space-y-1">
-            {store.children.map((c) => (
+            {s.children.map((c) => (
               <li key={c.id} className="flex justify-between text-sm">
                 <span>
                   {c.name}{" "}
-                  <span className="text-slate-400">
-                    ({parentById.get(c.parentId)?.name ?? "unbekannt"})
-                  </span>
+                  <span className="text-slate-400">({parentById.get(c.parentId)?.name ?? "unbekannt"})</span>
                 </span>
-                <button
-                  className="text-red-500 hover:underline"
-                  onClick={async () => {
-                    const data = await api(`/api/child?id=${c.id}`, { method: "DELETE" });
-                    if (data) setStore(data);
-                  }}
-                >
+                <button className="text-red-500 hover:underline" onClick={() => remove("child", c.id)}>
                   löschen
                 </button>
               </li>
@@ -187,7 +215,7 @@ export default function Home() {
             <input name="name" placeholder="Name" required className="w-full border rounded p-2 text-sm" />
             <select name="parentId" required className="w-full border rounded p-2 text-sm">
               <option value="">Elternteil wählen</option>
-              {store.parents.map((p) => (
+              {s.parents.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -202,18 +230,12 @@ export default function Home() {
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">Trainings</h2>
           <ul className="mb-3 space-y-1">
-            {store.trainings.map((t) => (
+            {s.trainings.map((t) => (
               <li key={t.id} className="flex justify-between text-sm">
                 <span>
                   {t.name} · {WEEKDAYS[t.weekday]} {t.startTime}–{t.endTime}
                 </span>
-                <button
-                  className="text-red-500 hover:underline"
-                  onClick={async () => {
-                    const data = await api(`/api/training?id=${t.id}`, { method: "DELETE" });
-                    if (data) setStore(data);
-                  }}
-                >
+                <button className="text-red-500 hover:underline" onClick={() => remove("training", t.id)}>
                   löschen
                 </button>
               </li>
@@ -240,13 +262,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="border rounded p-4 bg-white shadow-sm">
+      <section className="border rounded p-4 bg-white shadow-sm overflow-x-auto">
         <h2 className="font-semibold mb-2">Trainings-Anmeldungen</h2>
         <table className="text-sm">
           <thead>
             <tr>
               <th className="text-left pr-4">Kind</th>
-              {store.trainings.map((t) => (
+              {s.trainings.map((t) => (
                 <th key={t.id} className="text-left pr-4">
                   {t.name}
                   <div className="text-slate-400 font-normal">
@@ -257,16 +279,20 @@ export default function Home() {
             </tr>
           </thead>
           <tbody>
-            {store.children.map((c) => (
+            {s.children.map((c) => (
               <tr key={c.id}>
                 <td className="pr-4 py-1">{c.name}</td>
-                {store.trainings.map((t) => {
-                  const enrolled = store.enrollments.some(
+                {s.trainings.map((t) => {
+                  const enrolled = s.enrollments.some(
                     (e) => e.childId === c.id && e.trainingId === t.id
                   );
                   return (
                     <td key={t.id} className="pr-4 py-1">
-                      <input type="checkbox" checked={enrolled} onChange={() => toggleEnrollment(c.id, t.id, enrolled)} />
+                      <input
+                        type="checkbox"
+                        checked={enrolled}
+                        onChange={() => toggleEnrollment(c.id, t.id)}
+                      />
                     </td>
                   );
                 })}
@@ -287,14 +313,14 @@ export default function Home() {
           </button>
         </div>
 
-        {store.plan.length === 0 && (
+        {s.plan.length === 0 && (
           <p className="text-slate-500 text-sm">
-            Noch kein Plan. Klicken Sie auf „Automatisch planen", um Fahrer zuzuteilen.
+            Noch kein Plan. Klicken Sie auf „Automatisch planen“, um Fahrer zuzuteilen.
           </p>
         )}
 
         <ul className="space-y-2">
-          {store.plan.map((a, i) => {
+          {s.plan.map((a, i) => {
             const t = trainingById.get(a.trainingId);
             const driver = parentById.get(a.driverId);
             if (!t || !driver) return null;
@@ -305,9 +331,7 @@ export default function Home() {
                 </div>
                 <div className="text-slate-600">
                   Mitfahrer:{" "}
-                  {a.passengerChildIds
-                    .map((cid) => childById.get(cid)?.name ?? "?")
-                    .join(", ") || "–"}
+                  {a.passengerChildIds.map((cid) => childById.get(cid)?.name ?? "?").join(", ") || "–"}
                 </div>
                 <div className="text-slate-400">
                   {t.startTime}–{t.endTime} · {t.location}
@@ -344,6 +368,11 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      <footer className="text-xs text-slate-400">
+        Hinweis: Alle Daten werden nur lokal in diesem Browser gespeichert (localStorage). „Zurücksetzen“
+        löscht sie und lädt die Beispieldaten neu.
+      </footer>
     </main>
   );
 }

@@ -17,7 +17,6 @@ export type Training = {
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
   location: string;
-  teamName?: string;
 };
 
 export type Enrollment = {
@@ -27,9 +26,9 @@ export type Enrollment = {
 
 export type DriverAssignment = {
   trainingId: string;
-  driverId: string; // parentId
+  driverId: string;
   passengerChildIds: string[];
-  date: string; // ISO yyyy-mm-dd (konkretes Datum der Fahrt)
+  date: string; // yyyy-mm-dd (nächstes konkretes Datum)
 };
 
 export type Plan = DriverAssignment[];
@@ -48,4 +47,10 @@ export type Store = {
   trainings: Training[];
   enrollments: Enrollment[];
   plan: Plan;
+};
+
+export type Unassigned = {
+  childId: string;
+  trainingId: string;
+  reason: string;
 };

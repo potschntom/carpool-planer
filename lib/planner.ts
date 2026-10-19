@@ -1,16 +1,8 @@
 import { Child, Conflict, DriverAssignment, Enrollment, Parent, Plan, Training } from "./types";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export function toMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
-}
-
-export function fromMinutes(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 export function timesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
@@ -35,9 +27,10 @@ export function weekdayName(weekday: number): string {
 }
 
 function windowForTraining(training: Training, bufferMin = 15): { start: number; end: number } {
-  const start = toMinutes(training.startTime) - bufferMin;
-  const end = toMinutes(training.endTime) + bufferMin;
-  return { start, end };
+  return {
+    start: toMinutes(training.startTime) - bufferMin,
+    end: toMinutes(training.endTime) + bufferMin,
+  };
 }
 
 export function findConflicts(store: {
@@ -76,10 +69,8 @@ export function findConflicts(store: {
         const b = bookings[j];
         if (a.date !== b.date) continue;
         if (!timesOverlap(
-          toMinutes(a.training.startTime),
-          toMinutes(a.training.endTime),
-          toMinutes(b.training.startTime),
-          toMinutes(b.training.endTime)
+          toMinutes(a.training.startTime), toMinutes(a.training.endTime),
+          toMinutes(b.training.startTime), toMinutes(b.training.endTime)
         )) continue;
         conflicts.push({
           type: "child_double_booked",
@@ -118,11 +109,8 @@ export function autoAssignDrivers(store: {
   children: Child[];
   trainings: Training[];
   enrollments: Enrollment[];
-  plan: Plan;
 }): { plan: Plan; unassigned: { childId: string; trainingId: string; reason: string }[] } {
   const trainingById = new Map(store.trainings.map((t) => [t.id, t]));
-  const childById = new Map(store.children.map((c) => [c.id, c]));
-  const parentById = new Map(store.parents.map((p) => [p.id, p]));
 
   type Need = {
     childId: string;
@@ -145,7 +133,6 @@ export function autoAssignDrivers(store: {
 
   const newPlan: Plan = [];
   const unassigned: { childId: string; trainingId: string; reason: string }[] = [];
-
   const driverLoad = new Map<string, number>();
   const driverBusy = new Map<string, { date: string; start: number; end: number }[]>();
 
@@ -157,18 +144,8 @@ export function autoAssignDrivers(store: {
     grouped.set(key, arr);
   }
 
-  const assignmentsByDriver = new Map<string, DriverAssignment[]>();
-  for (const a of newPlan) {
-    const arr = assignmentsByDriver.get(a.driverId) ?? [];
-    arr.push(a);
-    assignmentsByDriver.set(a.driverId, arr);
-  }
-
   for (const [key, groupNeeds] of grouped) {
     const [trainingId, date] = key.split("|");
-    const training = trainingById.get(trainingId);
-    if (!training) continue;
-
     let remaining = [...groupNeeds];
     const candidates = [...store.parents].sort(
       (a, b) => (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0)
@@ -176,43 +153,32 @@ export function autoAssignDrivers(store: {
 
     for (const driver of candidates) {
       if (remaining.length === 0) break;
-
       const busy = driverBusy.get(driver.id) ?? [];
-      const hasConflictOnDate = busy.some(
+      if (busy.some(
         (b) => b.date === date && timesOverlap(b.start, b.end, groupNeeds[0].window.start, groupNeeds[0].window.end)
-      );
-      if (hasConflictOnDate) continue;
+      )) continue;
 
       const seatCapacity = 4;
       const take = remaining.slice(0, seatCapacity);
       if (take.length === 0) continue;
 
-      const assignment: DriverAssignment = {
+      newPlan.push({
         trainingId,
         driverId: driver.id,
         passengerChildIds: take.map((n) => n.childId),
         date,
-      };
-      newPlan.push(assignment);
+      });
       remaining = remaining.slice(take.length);
       driverLoad.set(driver.id, (driverLoad.get(driver.id) ?? 0) + 1);
       busy.push({ date, start: groupNeeds[0].window.start, end: groupNeeds[0].window.end });
       driverBusy.set(driver.id, busy);
-
-      const arr = assignmentsByDriver.get(driver.id) ?? [];
-      arr.push(assignment);
-      assignmentsByDriver.set(driver.id, arr);
     }
 
     for (const n of remaining) {
-      const child = childById.get(n.childId);
-      const driver = parentById.get(child?.parentId ?? "");
       unassigned.push({
         childId: n.childId,
         trainingId: n.trainingId,
-        reason: driver
-          ? "Kein verfügbarer Fahrer im Zeitfenster"
-          : "Kein verknüpftes Familienmitglied verfügbar",
+        reason: "Kein verfügbarer Fahrer im Zeitfenster",
       });
     }
   }
