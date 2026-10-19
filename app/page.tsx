@@ -30,7 +30,10 @@ export default function Home() {
     [persist]
   );
 
-  const conflicts = useMemo(() => (store ? findConflicts(store, s.trips) : []), [store]);
+  const conflicts = useMemo(
+    () => (store ? findConflicts(store, store.trips) : []),
+    [store]
+  );
   if (!store) return <main className="p-8">Lade ...</main>;
   const s = store;
   const locationById = new Map(s.locations.map((l) => [l.id, l]));
