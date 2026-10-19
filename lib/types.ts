@@ -1,56 +1,63 @@
+export type Location = {
+  id: string;
+  name: string;
+  meetingPoint?: string;
+};
+
 export type Parent = {
   id: string;
   name: string;
   phone?: string;
+  seats: number;
+  homeLocationId?: string;
 };
 
 export type Child = {
   id: string;
   name: string;
   parentId: string;
+  homeLocationId?: string;
 };
 
-export type Training = {
+export type EventType = "training" | "match";
+
+export type Event = {
   id: string;
-  name: string;
-  weekday: number; // 0=So ... 6=Sa
-  startTime: string; // "HH:MM"
-  endTime: string; // "HH:MM"
-  location: string;
+  type: EventType;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  locationId: string;
+  meetingPoint?: string;
+  opponent?: string;
+  isHome: boolean;
 };
 
-export type Enrollment = {
+export type Participation = {
   childId: string;
-  trainingId: string;
+  eventId: string;
 };
 
-export type DriverAssignment = {
-  trainingId: string;
+export type Direction = "outbound" | "return";
+
+export type Trip = {
+  eventId: string;
+  direction: Direction;
   driverId: string;
   passengerChildIds: string[];
-  date: string; // yyyy-mm-dd (nächstes konkretes Datum)
-};
-
-export type Plan = DriverAssignment[];
-
-export type Conflict = {
-  type: "driver_double_booked" | "child_double_booked";
-  parentId?: string;
-  childId?: string;
-  date: string;
-  description: string;
 };
 
 export type Store = {
+  locations: Location[];
   parents: Parent[];
   children: Child[];
-  trainings: Training[];
-  enrollments: Enrollment[];
-  plan: Plan;
+  events: Event[];
+  participations: Participation[];
+  trips: Trip[];
 };
 
-export type Unassigned = {
-  childId: string;
-  trainingId: string;
-  reason: string;
+export type Conflict = {
+  type: "child_double_booked" | "driver_double_booked" | "capacity_exceeded";
+  description: string;
 };

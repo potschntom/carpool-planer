@@ -1,4 +1,4 @@
-import { Child, Conflict, DriverAssignment, Enrollment, Parent, Plan, Training } from "./types";
+import { Child, Conflict, Direction, Event, Parent, Store, Trip } from "./types";
 
 export function toMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -9,179 +9,155 @@ export function timesOverlap(aStart: number, aEnd: number, bStart: number, bEnd:
   return aStart < bEnd && bStart < aEnd;
 }
 
-export function nextOccurrenceOfWeekday(weekday: number, from = new Date()): Date {
-  const d = new Date(from);
-  const diff = (weekday - d.getDay() + 7) % 7;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-export function formatDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export function weekdayName(weekday: number): string {
+export function weekdayName(date: string): string {
   const names = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-  return names[weekday] ?? String(weekday);
+  const d = new Date(`${date}T00:00:00`);
+  return names[d.getDay()] ?? "";
 }
 
-function windowForTraining(training: Training, bufferMin = 15): { start: number; end: number } {
-  return {
-    start: toMinutes(training.startTime) - bufferMin,
-    end: toMinutes(training.endTime) + bufferMin,
-  };
+export function formatDateDE(date: string): string {
+  const [y, m, d] = date.split("-");
+  return `${d}.${m}.${y}`;
 }
 
-export function findConflicts(store: {
-  parents: Parent[];
-  children: Child[];
-  trainings: Training[];
-  enrollments: Enrollment[];
-  plan: Plan;
-}): Conflict[] {
+export function eventTimeWindow(e: Event, direction: Direction, bufferMin = 15): { start: number; end: number } {
+  const start = toMinutes(e.startTime);
+  const end = toMinutes(e.endTime);
+  if (direction === "outbound") {
+    return { start: start - bufferMin, end: start + bufferMin / 2 };
+  }
+  return { start: end - bufferMin / 2, end: end + bufferMin };
+}
+
+type TripCandidate = {
+  eventId: string;
+  direction: Direction;
+  driverId: string;
+  capacity: number;
+};
+
+export function findConflicts(store: Store, trips: Trip[]): Conflict[] {
   const conflicts: Conflict[] = [];
-  const trainingById = new Map(store.trainings.map((t) => [t.id, t]));
+  const eventById = new Map(store.events.map((e) => [e.id, e]));
+  const parentById = new Map(store.parents.map((p) => [p.id, p]));
 
-  const childBookings = new Map<string, { training: Training; date: string }[]>();
-  for (const e of store.enrollments) {
-    const t = trainingById.get(e.trainingId);
-    if (!t) continue;
-    const date = formatDate(nextOccurrenceOfWeekday(t.weekday));
-    const arr = childBookings.get(e.childId) ?? [];
-    arr.push({ training: t, date });
-    childBookings.set(e.childId, arr);
+  for (const t of trips) {
+    const e = eventById.get(t.eventId);
+    const driver = parentById.get(t.driverId);
+    if (!e || !driver) continue;
+    if (t.passengerChildIds.length + 1 > driver.seats) {
+      conflicts.push({
+        type: "capacity_exceeded",
+        description: `Fahrer ${driver.name} hat nur ${driver.seats} Plätze, aber ${t.passengerChildIds.length + 1} Personen in der Fahrt zu „${e.title}“ (${t.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}).`,
+      });
+    }
   }
 
-  const driverBookings = new Map<string, { assignment: DriverAssignment; training: Training }[]>();
-  for (const a of store.plan) {
-    const t = trainingById.get(a.trainingId);
-    if (!t) continue;
-    const arr = driverBookings.get(a.driverId) ?? [];
-    arr.push({ assignment: a, training: t });
-    driverBookings.set(a.driverId, arr);
+  const driverTrips = new Map<string, Trip[]>();
+  for (const t of trips) {
+    const arr = driverTrips.get(t.driverId) ?? [];
+    arr.push(t);
+    driverTrips.set(t.driverId, arr);
   }
 
-  for (const [childId, bookings] of childBookings) {
-    for (let i = 0; i < bookings.length; i++) {
-      for (let j = i + 1; j < bookings.length; j++) {
-        const a = bookings[i];
-        const b = bookings[j];
-        if (a.date !== b.date) continue;
-        if (!timesOverlap(
-          toMinutes(a.training.startTime), toMinutes(a.training.endTime),
-          toMinutes(b.training.startTime), toMinutes(b.training.endTime)
-        )) continue;
-        conflicts.push({
-          type: "child_double_booked",
-          childId,
-          date: a.date,
-          description: `Kind ist zur selben Zeit in zwei Trainings: ${a.training.name} und ${b.training.name}`,
-        });
+  for (const [driverId, dt] of driverTrips) {
+    const driver = parentById.get(driverId);
+    if (!driver) continue;
+    for (let i = 0; i < dt.length; i++) {
+      for (let j = i + 1; j < dt.length; j++) {
+        const a = dt[i];
+        const b = dt[j];
+        const ea = eventById.get(a.eventId);
+        const eb = eventById.get(b.eventId);
+        if (!ea || !eb) continue;
+        if (ea.date !== eb.date) continue;
+        if (ea.date !== eb.date) continue;
+        if (a.direction === b.direction) {
+          const wa = eventTimeWindow(ea, a.direction);
+          const wb = eventTimeWindow(eb, b.direction);
+          if (!timesOverlap(wa.start, wa.end, wb.start, wb.end)) continue;
+          const dirLabel = a.direction === "outbound" ? "Hinfahrt" : "Rückfahrt";
+          conflicts.push({
+            type: "driver_double_booked",
+            description: `${driver.name} ist zur gleichen Zeit für zwei Fahrten eingetragen: „${ea.title}“ und „${eb.title}“ (beide ${dirLabel}n).`,
+          });
+        }
       }
     }
   }
 
-  for (const [parentId, bookings] of driverBookings) {
-    for (let i = 0; i < bookings.length; i++) {
-      for (let j = i + 1; j < bookings.length; j++) {
-        const a = bookings[i];
-        const b = bookings[j];
-        if (a.assignment.date !== b.assignment.date) continue;
-        const wa = windowForTraining(a.training);
-        const wb = windowForTraining(b.training);
-        if (!timesOverlap(wa.start, wa.end, wb.start, wb.end)) continue;
-        conflicts.push({
-          type: "driver_double_booked",
-          parentId,
-          date: a.assignment.date,
-          description: `Fahrer ist zeitlich überlappt: ${a.training.name} und ${b.training.name}`,
-        });
-      }
+  const childTrips = new Map<string, Trip[]>();
+  for (const t of trips) {
+    for (const cid of t.passengerChildIds) {
+      const arr = childTrips.get(cid) ?? [];
+      arr.push(t);
+      childTrips.set(cid, arr);
     }
   }
 
   return conflicts;
 }
 
-export function autoAssignDrivers(store: {
-  parents: Parent[];
-  children: Child[];
-  trainings: Training[];
-  enrollments: Enrollment[];
-}): { plan: Plan; unassigned: { childId: string; trainingId: string; reason: string }[] } {
-  const trainingById = new Map(store.trainings.map((t) => [t.id, t]));
-
-  type Need = {
-    childId: string;
-    trainingId: string;
-    date: string;
-    window: { start: number; end: number };
-  };
-
-  const needs: Need[] = [];
-  for (const e of store.enrollments) {
-    const t = trainingById.get(e.trainingId);
-    if (!t) continue;
-    needs.push({
-      childId: e.childId,
-      trainingId: e.trainingId,
-      date: formatDate(nextOccurrenceOfWeekday(t.weekday)),
-      window: windowForTraining(t),
-    });
-  }
-
-  const newPlan: Plan = [];
-  const unassigned: { childId: string; trainingId: string; reason: string }[] = [];
+export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { childId: string; eventId: string; direction: Direction; reason: string }[] } {
+  const trips: Trip[] = [];
+  const unassigned: { childId: string; eventId: string; direction: Direction; reason: string }[] = [];
+  const parentById = new Map(store.parents.map((p) => [p.id, p]));
   const driverLoad = new Map<string, number>();
-  const driverBusy = new Map<string, { date: string; start: number; end: number }[]>();
+  const driverTrips = new Map<string, Trip[]>();
 
-  const grouped = new Map<string, Need[]>();
-  for (const n of needs) {
-    const key = `${n.trainingId}|${n.date}`;
-    const arr = grouped.get(key) ?? [];
-    arr.push(n);
-    grouped.set(key, arr);
-  }
+  for (const event of [...store.events].sort((a, b) => a.date.localeCompare(b.date))) {
+    const participants = store.participations
+      .filter((p) => p.eventId === event.id)
+      .map((p) => p.childId);
+    if (participants.length === 0) continue;
 
-  for (const [key, groupNeeds] of grouped) {
-    const [trainingId, date] = key.split("|");
-    let remaining = [...groupNeeds];
-    const candidates = [...store.parents].sort(
-      (a, b) => (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0)
-    );
+    for (const direction of ["outbound", "return"] as Direction[]) {
+      let remaining = [...participants];
+      const candidates = [...store.parents].sort(
+        (a, b) => (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0)
+      );
 
-    for (const driver of candidates) {
-      if (remaining.length === 0) break;
-      const busy = driverBusy.get(driver.id) ?? [];
-      if (busy.some(
-        (b) => b.date === date && timesOverlap(b.start, b.end, groupNeeds[0].window.start, groupNeeds[0].window.end)
-      )) continue;
+      for (const driver of candidates) {
+        if (remaining.length === 0) break;
+        const ownChildInCar = remaining.some((cid) => store.children.find((c) => c.id === cid)?.parentId === driver.id);
+        const seatsForPassengers = Math.max(0, driver.seats - (ownChildInCar ? 1 : 0));
+        if (seatsForPassengers === 0) continue;
+        const take = remaining.slice(0, seatsForPassengers);
+        if (take.length === 0) continue;
 
-      const seatCapacity = 4;
-      const take = remaining.slice(0, seatCapacity);
-      if (take.length === 0) continue;
+        const trip: Trip = { eventId: event.id, direction, driverId: driver.id, passengerChildIds: take };
+        trips.push(trip);
+        remaining = remaining.slice(take.length);
+        driverLoad.set(driver.id, (driverLoad.get(driver.id) ?? 0) + 1);
+        const arr = driverTrips.get(driver.id) ?? [];
+        arr.push(trip);
+        driverTrips.set(driver.id, arr);
+      }
 
-      newPlan.push({
-        trainingId,
-        driverId: driver.id,
-        passengerChildIds: take.map((n) => n.childId),
-        date,
-      });
-      remaining = remaining.slice(take.length);
-      driverLoad.set(driver.id, (driverLoad.get(driver.id) ?? 0) + 1);
-      busy.push({ date, start: groupNeeds[0].window.start, end: groupNeeds[0].window.end });
-      driverBusy.set(driver.id, busy);
-    }
-
-    for (const n of remaining) {
-      unassigned.push({
-        childId: n.childId,
-        trainingId: n.trainingId,
-        reason: "Kein verfügbarer Fahrer im Zeitfenster",
-      });
+      for (const cid of remaining) {
+        unassigned.push({
+          childId: cid,
+          eventId: event.id,
+          direction,
+          reason: "Keine freien Plätze mehr",
+        });
+      }
     }
   }
 
-  return { plan: newPlan, unassigned };
+  return { trips, unassigned };
+}
+
+export function driverStats(store: Store): { parent: Parent; outbound: number; return: number; total: number }[] {
+  return store.parents
+    .map((p) => {
+      const outbound = store.trips.filter((t) => t.driverId === p.id && t.direction === "outbound").length;
+      const ret = store.trips.filter((t) => t.driverId === p.id && t.direction === "return").length;
+      return { parent: p, outbound, return: ret, total: outbound + ret };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+export function childById(store: Store): Map<string, Child> {
+  return new Map(store.children.map((c) => [c.id, c]));
 }
