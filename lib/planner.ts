@@ -105,7 +105,7 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
   const childByIdMap = new Map(store.children.map((c) => [c.id, c]));
 
   for (const event of [...store.events].sort((a, b) => a.date.localeCompare(b.date))) {
-    const participants = store.participations
+    const participants = (store.participations ?? [])
       .filter((p) => p.eventId === event.id)
       .map((p) => p.childId);
     if (participants.length === 0) continue;
@@ -129,7 +129,7 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
 
         // Nur Eltern, die diese Fahrt aktiv angeboten haben („ich kann diese Fahrt machen“)
         const offeredParentIds = new Set(
-          store.offers
+          (store.offers ?? [])
             .filter((o) => o.eventId === event.id && o.direction === direction)
             .map((o) => o.parentId)
         );
@@ -191,8 +191,8 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
 export function driverStats(store: Store): { parent: Parent; outbound: number; return: number; total: number }[] {
   return store.parents
     .map((p) => {
-      const outbound = store.trips.filter((t) => t.driverId === p.id && t.direction === "outbound").length;
-      const ret = store.trips.filter((t) => t.driverId === p.id && t.direction === "return").length;
+      const outbound = (store.trips ?? []).filter((t) => t.driverId === p.id && t.direction === "outbound").length;
+      const ret = (store.trips ?? []).filter((t) => t.driverId === p.id && t.direction === "return").length;
       return { parent: p, outbound, return: ret, total: outbound + ret };
     })
     .sort((a, b) => b.total - a.total);
