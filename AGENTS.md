@@ -38,3 +38,13 @@ Daten im localStorage (`lib/useStore.ts`, Storage-Key `carpool-planer-store-v3`)
     Seitenende, die zudem nur nach „Automatisch planen" aktualisiert wurde).
   - Abgeleitet aus den aktuellen `trips` (`missingSpots`), d. h. auch nach
     manuellen Verschiebungen sofort korrekt – ohne erneuten Auto-Plan-Lauf.
+- 2026-10-21 (Session „Beispieldaten + Wohnort-Cluster"):
+  - `lib/seed.ts` verdreifacht: 12 Elternteile, 18 Kinder, 6 Termine,
+    deutlich mehr Teilnahmen und Fahr-Angebote – für realistischere Usability-Tests.
+  - `app/page.tsx`: Kinder werden nach Wohnort gruppiert und farbig markiert:
+    Kinder-Liste nach Ort geclustert (Orts-Badge + Anzahl), Kinder mit
+    Wohnortfarbe; in Terminen gibt es pro Wohnort Zähler-Badges und jeder
+    Teilnehmer-Chip hat einen Farb-Punkt seines Wohnorts (Farbskala in
+    `LOCATION_COLORS`/`kidColor`/`kidColorBorder`/`kidDot`, max. 8 Farben,
+    danach Modulo-Wiederholung).
+  - Commits direkt auf `main` deployt (GitHub Pages).

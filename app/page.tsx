@@ -172,6 +172,51 @@ export default function Home() {
     });
   }
 
+  const LOCATION_COLORS = [
+    "text-blue-700",
+    "text-emerald-700",
+    "text-purple-700",
+    "text-orange-700",
+    "text-pink-700",
+    "text-teal-700",
+    "text-indigo-700",
+    "text-cyan-700",
+  ];
+  function kidColor(homeLocationId: string | undefined): string {
+    if (!homeLocationId) return "text-slate-500";
+    const index = s.locations.findIndex((l) => l.id === homeLocationId);
+    return index >= 0 ? LOCATION_COLORS[index % LOCATION_COLORS.length] : "text-slate-500";
+  }
+  function kidColorBorder(homeLocationId: string): string {
+    const borders = [
+      "border-blue-300",
+      "border-emerald-300",
+      "border-purple-300",
+      "border-orange-300",
+      "border-pink-300",
+      "border-teal-300",
+      "border-indigo-300",
+      "border-cyan-300",
+    ];
+    const index = s.locations.findIndex((l) => l.id === homeLocationId);
+    return index >= 0 ? borders[index % borders.length] : "border-slate-300";
+  }
+
+  function kidDot(homeLocationId: string): string {
+    const dots = [
+      "bg-blue-500",
+      "bg-emerald-500",
+      "bg-purple-500",
+      "bg-orange-500",
+      "bg-pink-500",
+      "bg-teal-500",
+      "bg-indigo-500",
+      "bg-cyan-500",
+    ];
+    const index = s.locations.findIndex((l) => l.id === homeLocationId);
+    return index >= 0 ? dots[index % dots.length] : "bg-slate-300";
+  }
+
   function startLocName(t: (typeof s.trips)[number]): string {
     let locId: string | undefined;
     if (t.direction === "return") {
@@ -331,16 +376,46 @@ export default function Home() {
 
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">🧒 Kinder</h2>
-          <ul className="mb-3 space-y-1 text-sm">
-            {s.children.map((c) => (
-              <li key={c.id}>
-                {c.name}
-                <span className="text-slate-400">
-                  {" "}({parentById.get(c.parentId)?.name ?? "unbekannt"}
-                  {c.homeLocationId && `, ${locationById.get(c.homeLocationId)?.name}`})
-                </span>
-              </li>
-            ))}
+          <ul className="mb-3 space-y-3 text-sm">
+            {s.locations.map((loc) => {
+              const kids = s.children.filter((c) => c.homeLocationId === loc.id);
+              if (kids.length === 0) return null;
+              return (
+                <li key={loc.id}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-white border ${kidColorBorder(loc.id)} ${kidColor(loc.id)}`}>{loc.name}</span>
+                    <span className="text-xs text-slate-400">{kids.length}</span>
+                  </div>
+                  <ul className="ml-1 mt-1 space-y-0.5">
+                    {kids.map((c) => (
+                      <li key={c.id} className="flex items-center gap-1.5">
+                        <span className={kidColor(c.homeLocationId)} title={`Wohnort: ${loc.name}`}>
+                          {c.name}
+                        </span>
+                        <span className="text-slate-400 text-xs">({parentById.get(c.parentId)?.name ?? "unbekannt"})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+            {(() => {
+              const noLoc = s.children.filter((c) => !c.homeLocationId);
+              if (noLoc.length === 0) return null;
+              return (
+                <li>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ohne Wohnort</div>
+                  <ul className="ml-1 mt-1 space-y-0.5">
+                    {noLoc.map((c) => (
+                      <li key={c.id}>
+                        {c.name}
+                        <span className="text-slate-400 text-xs"> ({parentById.get(c.parentId)?.name ?? "unbekannt"})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })()}
           </ul>
           <form onSubmit={addChild} className="space-y-2">
             <input name="name" placeholder="Name" required className="w-full border rounded p-2 text-sm" />
@@ -414,26 +489,45 @@ export default function Home() {
 
                 <div className="mt-3">
                   <div className="text-xs font-medium text-slate-600 mb-1">Teilnehmende Kinder:</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...new Set(participants.map((c) => c.homeLocationId).filter((x): x is string => Boolean(x)))].map((locId) => {
+                      const loc = locationById.get(locId);
+                      if (!loc) return null;
+                      return (
+                        <span key={locId} className={`text-xs font-semibold rounded-full px-2 py-0.5 border bg-white ${kidColorBorder(locId)} ${kidColor(locId)}`}>
+                          {loc.name}: {participants.filter((c) => c.homeLocationId === locId).length}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-1">
                     {s.children.map((c) => {
                       const on = s.participations.some((p) => p.childId === c.id && p.eventId === event.id);
-                      const missingHere = missingSpots.some(
+                      const missingHere = on && missingSpots.some(
                         (m) => m.childId === c.id && m.eventId === event.id
                       );
+                      const locDot = c.homeLocationId ? kidDot(c.homeLocationId) : "bg-slate-300";
                       return (
                         <label
                           key={c.id}
                           className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${
-                            on && missingHere
+                            missingHere
                               ? "bg-red-600 text-white border-red-600 ring-2 ring-red-300 font-medium"
                               : on
                                 ? "bg-blue-600 text-white border-blue-600"
                                 : "bg-white text-slate-600"
                           }`}
-                          title={on && missingHere ? "Ohne Platz in mindestens einer Richtung!" : undefined}
+                          title={
+                            missingHere
+                              ? "Ohne Platz in mindestens einer Richtung!"
+                              : c.homeLocationId
+                                ? `Wohnort: ${locationById.get(c.homeLocationId)?.name ?? "?"}`
+                                : undefined
+                          }
                         >
                           <input type="checkbox" className="hidden" checked={on} onChange={() => toggleParticipation(c.id, event.id)} />
-                          {on && missingHere ? "🚫 " : ""}{c.name}
+                          <span className={`inline-block w-2 h-2 rounded-full mr-1 align-middle ${on && !missingHere ? "bg-white/80" : locDot}`} />
+                          {missingHere ? "🚫 " : ""}{c.name}
                         </label>
                       );
                     })}
