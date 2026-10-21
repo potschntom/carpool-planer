@@ -17,6 +17,7 @@ export type Child = {
   name: string;
   parentId: string;
   homeLocationId?: string;
+  team?: string;
 };
 
 export type EventType = "training" | "match";

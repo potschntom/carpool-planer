@@ -48,3 +48,14 @@ Daten im localStorage (`lib/useStore.ts`, Storage-Key `carpool-planer-store-v3`)
     `LOCATION_COLORS`/`kidColor`/`kidColorBorder`/`kidDot`, max. 8 Farben,
     danach Modulo-Wiederholung).
   - Commits direkt auf `main` deployt (GitHub Pages).
+- 2026-10-21 (Session „Mannschaften + neue Orte"):
+  - `lib/types.ts`: `Child` hat jetzt optionales `team` (z. B. "U12") –
+    Kinder sind normalerweise fix einer Mannschaft zugeordnet.
+  - `lib/seed.ts`: Orte umbenannt in Oberndorf, Kirnberg, Texing, Bründl
+    (jeweils mit Sportplatz-Treffpunkt); Seed-Kinder haben Teams U10/U12/U14,
+    Termine/Anmeldungen/Angebote team-konsistent.
+  - `app/page.tsx`: Kind-Formular mit Mannschafts-Feld (Auto-Vervollständigung
+    via datalist), Team-Badge in der Kinder-Liste, Team-Kurzinfo am
+    Teilnehmer-Chip (Tooltip) und pro-Termine-Buttons, um eine ganze
+    Mannschaft mit einem Klick an-/abzuwählen.
+  - Commits direkt auf `main` deployt (GitHub Pages).

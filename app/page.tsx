@@ -118,7 +118,13 @@ export default function Home() {
       ...s,
       children: [
         ...s.children,
-        { id: newId("c"), name, parentId, homeLocationId: String(form.get("homeLocationId") ?? "") || undefined },
+        {
+          id: newId("c"),
+          name,
+          parentId,
+          homeLocationId: String(form.get("homeLocationId") ?? "") || undefined,
+          team: String(form.get("team") ?? "").trim() || undefined,
+        },
       ],
     });
     e.currentTarget.reset();
@@ -392,6 +398,7 @@ export default function Home() {
                         <span className={kidColor(c.homeLocationId)} title={`Wohnort: ${loc.name}`}>
                           {c.name}
                         </span>
+                        {c.team && <span className="text-xs bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5 font-medium">{c.team}</span>}
                         <span className="text-slate-400 text-xs">({parentById.get(c.parentId)?.name ?? "unbekannt"})</span>
                       </li>
                     ))}
@@ -419,6 +426,12 @@ export default function Home() {
           </ul>
           <form onSubmit={addChild} className="space-y-2">
             <input name="name" placeholder="Name" required className="w-full border rounded p-2 text-sm" />
+            <input name="team" placeholder="Mannschaft (z. B. U12)" list="team-list" className="w-full border rounded p-2 text-sm" />
+            <datalist id="team-list">
+              {[...new Set(s.children.map((c) => c.team).filter(Boolean))].map((team) => (
+                <option key={team} value={team ?? ""} />
+              ))}
+            </datalist>
             <select name="parentId" required className="w-full border rounded p-2 text-sm">
               <option value="">Elternteil wählen</option>
               {s.parents.map((p) => (
@@ -501,6 +514,48 @@ export default function Home() {
                     })}
                   </div>
                   <div className="flex flex-wrap gap-2 mt-1">
+                    {[...new Set(s.children.map((c) => c.team).filter(Boolean))].map((team) => {
+                      const teamKids = s.children.filter((c) => c.team === team);
+                      const allOn = teamKids.every((c) =>
+                        s.participations.some((p) => p.childId === c.id && p.eventId === event.id)
+                      );
+                      const someOn = teamKids.some((c) =>
+                        s.participations.some((p) => p.childId === c.id && p.eventId === event.id)
+                      );
+                      return (
+                        <button
+                          key={team}
+                          type="button"
+                          className={`text-xs rounded-full px-2 py-0.5 border font-medium ${
+                            allOn
+                              ? "bg-slate-800 text-white border-slate-800"
+                              : someOn
+                                ? "bg-slate-200 text-slate-700 border-slate-400"
+                                : "bg-white text-slate-500 border-slate-200"
+                          }`}
+                          onClick={() => {
+                            const all = teamKids.every((c) =>
+                              s.participations.some((p) => p.childId === c.id && p.eventId === event.id)
+                            );
+                            const next = all
+                              ? s.participations.filter(
+                                  (p) => !(p.eventId === event.id && teamKids.some((k) => k.id === p.childId))
+                                )
+                              : [
+                                  ...s.participations.filter(
+                                    (p) => !(p.eventId === event.id && teamKids.some((k) => k.id === p.childId))
+                                  ),
+                                  ...teamKids.map((c) => ({ childId: c.id, eventId: event.id })),
+                                ];
+                            save({ ...s, participations: next });
+                          }}
+                          title={`${team} komplett an-/abwählen (${teamKids.length} Kinder)`}
+                        >
+                          {team}
+                        </button>
+                      );
+                    })}
+                    <span className="w-px bg-slate-200 mx-0.5 self-stretch" />
                     {s.children.map((c) => {
                       const on = s.participations.some((p) => p.childId === c.id && p.eventId === event.id);
                       const missingHere = on && missingSpots.some(
@@ -521,13 +576,14 @@ export default function Home() {
                             missingHere
                               ? "Ohne Platz in mindestens einer Richtung!"
                               : c.homeLocationId
-                                ? `Wohnort: ${locationById.get(c.homeLocationId)?.name ?? "?"}`
+                                ? `Wohnort: ${locationById.get(c.homeLocationId)?.name ?? "?"}${c.team ? ` · ${c.team}` : ""}`
                                 : undefined
                           }
                         >
                           <input type="checkbox" className="hidden" checked={on} onChange={() => toggleParticipation(c.id, event.id)} />
                           <span className={`inline-block w-2 h-2 rounded-full mr-1 align-middle ${on && !missingHere ? "bg-white/80" : locDot}`} />
                           {missingHere ? "🚫 " : ""}{c.name}
+                          {c.team && <span className="ml-1 opacity-70">({c.team})</span>}
                         </label>
                       );
                     })}
