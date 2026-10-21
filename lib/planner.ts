@@ -103,7 +103,6 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
   const unassigned: { childId: string; eventId: string; direction: Direction; reason: string }[] = [];
   const driverLoad = new Map<string, number>();
   const childByIdMap = new Map(store.children.map((c) => [c.id, c]));
-  const parentById = new Map(store.parents.map((p) => [p.id, p]));
 
   for (const event of [...store.events].sort((a, b) => a.date.localeCompare(b.date))) {
     const participants = store.participations
@@ -125,24 +124,34 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
         byStart.set(start, arr);
       }
 
-      const startGroups = [...byStart.entries()];
-
-      for (const [startLocationId, kidsAtStart] of startGroups) {
+      for (const [startLocationId, kidsAtStart] of byStart.entries()) {
         let remaining = [...kidsAtStart];
 
-        // Bevorzugt Fahrer, die am selben Startort wohnen, danach allgemein Lastenausgleich
-        const candidates = [...store.parents].sort((a, b) => {
-          const aLocal = a.homeLocationId === startLocationId ? 0 : 1;
-          const bLocal = b.homeLocationId === startLocationId ? 0 : 1;
-          if (aLocal !== bLocal) return aLocal - bLocal;
+        // Fahrer, die von diesem Startort aus fahren KÖNNEN:
+        // bei Hinfahrt nur Eltern mit Wohnort = Startort,
+        // bei Rückfahrt alle Eltern (Start ist der Trainingsplatz)
+        const eligible = store.parents.filter((p) =>
+          direction === "return" ? true : p.homeLocationId === startLocationId
+        );
+
+        // Priorität: 1) muss ohnehin fahren (eigenes Kind nimmt teil)
+        //            2) wenigste Fahrten bisher (Statistik)
+        const mustDrive = (p: (typeof store.parents)[number]) =>
+          store.children.some(
+            (c) => c.parentId === p.id && participants.includes(c.id)
+          );
+
+        const candidates = [...eligible].sort((a, b) => {
+          const aMust = mustDrive(a) ? 0 : 1;
+          const bMust = mustDrive(b) ? 0 : 1;
+          if (aMust !== bMust) return aMust - bMust;
           return (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0);
         });
 
         for (const driver of candidates) {
           if (remaining.length === 0) break;
-          const seatsForPassengers = driver.seats;
-          if (seatsForPassengers === 0) continue;
-          const take = remaining.slice(0, seatsForPassengers);
+          if (driver.seats === 0) continue;
+          const take = remaining.slice(0, driver.seats);
           if (take.length === 0) continue;
 
           trips.push({ eventId: event.id, direction, driverId: driver.id, passengerChildIds: take });
@@ -157,7 +166,10 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
             childId: cid,
             eventId: event.id,
             direction,
-            reason: `Keine freien Plätze mehr ab ${startName}`,
+            reason:
+              direction === "outbound"
+                ? `Kein Fahrer mit freien Plätzen ab ${startName} verfügbar – Kind kann nicht von woanders zugeordnet werden`
+                : `Keine freien Plätze für die Rückfahrt ab ${startName}`,
           });
         }
       }
