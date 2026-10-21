@@ -1,0 +1,16 @@
+# HTTP Basic Auth für die gesamte Website
+# Voraussetzung: Apache-Webserver mit AllowOverride AuthConfig
+# Die .htpasswd liegt idealerweise AUSSERHALB des Web-Roots (siehe Pfad unten anpassen!)
+
+AuthType Basic
+AuthName "Fahrgemeinschafts-Planer – bitte anmelden"
+AuthUserFile /home/USER/.htpasswd
+Require valid-user
+
+# Sensible Dateien blockieren
+<FilesMatch "^\.(htaccess|htpasswd)">
+    Require all denied
+</FilesMatch>
+
+# Verzeichnislisting deaktivieren
+Options -Indexes
