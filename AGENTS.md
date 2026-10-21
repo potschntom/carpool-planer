@@ -84,4 +84,5 @@ Daten im localStorage (`lib/useStore.ts`, Storage-Key `carpool-planer-store-v3`)
   - Rotes Warnbanner bleibt global unter dem Header sichtbar.
   - Verifikation: `npx tsc --noEmit`, `npx tsx scripts/smoke.ts`,
     `NODE_ENV=production npx next build` – alle grün.
-  - Commits direkt auf `main` deployt (GitHub Pages).
+  - Follow-up: Warnbanner einklappbar (`alertsOpen`-State) – zugeklappt
+    nur eine Zeile mit Anzahl, Klappt die Detailliste auf.
