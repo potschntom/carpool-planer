@@ -34,6 +34,23 @@ export default function Home() {
     () => (store ? findConflicts(store, store.trips) : []),
     [store]
   );
+
+  const missingSpots = useMemo(() => {
+    if (!store) return [];
+    const result: { childId: string; eventId: string; direction: Direction }[] = [];
+    for (const p of store.participations) {
+      for (const direction of ["outbound", "return"] as Direction[]) {
+        const seated = store.trips.some(
+          (t) =>
+            t.eventId === p.eventId &&
+            t.direction === direction &&
+            t.passengerChildIds.includes(p.childId)
+        );
+        if (!seated) result.push({ childId: p.childId, eventId: p.eventId, direction });
+      }
+    }
+    return result;
+  }, [store]);
   if (!store) return <main className="p-8">Lade ...</main>;
   const s = store;
   const locationById = new Map(s.locations.map((l) => [l.id, l]));
@@ -234,6 +251,27 @@ export default function Home() {
 
       {msg && <div className="bg-red-100 border border-red-300 text-red-800 rounded p-3">{msg}</div>}
 
+      {missingSpots.length > 0 && (
+        <div className="bg-red-600 text-white rounded p-4 shadow-md" role="alert">
+          <div className="font-bold mb-1">
+            ⚠️ {missingSpots.length} Kind{missingSpots.length > 1 ? "er" : ""} ohne Platz!
+          </div>
+          <ul className="text-sm list-disc pl-5">
+            {missingSpots.map((m, i) => {
+              const ev = s.events.find((e) => e.id === m.eventId);
+              return (
+                <li key={i}>
+                  <span className="font-medium">{childMap.get(m.childId)?.name ?? "?"}</span>{" "}
+                  → {ev?.title ?? "?"} ({formatDateDE(ev?.date ?? "")}, {ev?.startTime}) ·{" "}
+                  {m.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="text-xs mt-1 opacity-90">Rot markierte Kinder im Termin brauchen noch eine Fahrt.</div>
+        </div>
+      )}
+
       <section className="grid md:grid-cols-3 gap-6">
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">📍 Orte</h2>
@@ -379,10 +417,23 @@ export default function Home() {
                   <div className="flex flex-wrap gap-2">
                     {s.children.map((c) => {
                       const on = s.participations.some((p) => p.childId === c.id && p.eventId === event.id);
+                      const missingHere = missingSpots.some(
+                        (m) => m.childId === c.id && m.eventId === event.id
+                      );
                       return (
-                        <label key={c.id} className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${on ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600"}`}>
+                        <label
+                          key={c.id}
+                          className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${
+                            on && missingHere
+                              ? "bg-red-600 text-white border-red-600 ring-2 ring-red-300 font-medium"
+                              : on
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-slate-600"
+                          }`}
+                          title={on && missingHere ? "Ohne Platz in mindestens einer Richtung!" : undefined}
+                        >
                           <input type="checkbox" className="hidden" checked={on} onChange={() => toggleParticipation(c.id, event.id)} />
-                          {c.name}
+                          {on && missingHere ? "🚫 " : ""}{c.name}
                         </label>
                       );
                     })}
@@ -421,6 +472,17 @@ export default function Home() {
                           );
                         })}
                       </div>
+                      {(() => {
+                        const missingDir = missingSpots.filter(
+                          (m) => m.eventId === event.id && m.direction === direction
+                        );
+                        return missingDir.length > 0 ? (
+                          <div className="bg-red-100 border border-red-400 rounded px-3 py-2 mb-2 text-sm text-red-800">
+                            <span className="font-semibold">🚫 Ohne Platz ({direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}):</span>{" "}
+                            {missingDir.map((m) => childMap.get(m.childId)?.name ?? "?").join(", ")}
+                          </div>
+                        ) : null;
+                      })()}
                       {dirTrips.length === 0 ? (
                         <p className="text-xs text-slate-400">Noch nicht geplant.</p>
                       ) : (
