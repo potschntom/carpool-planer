@@ -21,6 +21,7 @@ export function seedStore(): Store {
       { id: "p10", name: "Jens Bauer", phone: "0160 00000000", seats: 3, homeLocationId: "l2" },
       { id: "p11", name: "Katrin Vogel", phone: "0161 11111112", seats: 4, homeLocationId: "l3" },
       { id: "p12", name: "Lars Peters", phone: "0162 22222223", seats: 2, homeLocationId: "l4" },
+      { id: "p-bus", name: "Mannschaftsbus", seats: 8, homeLocationId: "l1", isBus: true },
     ],
     children: [
       { id: "c1", name: "Emil Schmidt", parentId: "p1", homeLocationId: "l1", team: "U12" },

@@ -10,6 +10,7 @@ export type Parent = {
   phone?: string;
   seats: number;
   homeLocationId?: string;
+  isBus?: boolean;
 };
 
 export type Child = {

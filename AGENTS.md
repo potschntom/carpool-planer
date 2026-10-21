@@ -59,3 +59,15 @@ Daten im localStorage (`lib/useStore.ts`, Storage-Key `carpool-planer-store-v3`)
     Teilnehmer-Chip (Tooltip) und pro-Termine-Buttons, um eine ganze
     Mannschaft mit einem Klick an-/abzuwählen.
   - Commits direkt auf `main` deployt (GitHub Pages).
+- 2026-10-21 (Session „Mannschaftsbus"):
+  - `lib/types.ts`: `Parent.isBus?: boolean` – der Bus ist ein spezielles
+    „Elternteil", dessen Verfügbarkeit pro Termin/Richtung über die
+    normalen Angebote geregelt wird.
+  - `lib/seed.ts`: Bus `p-bus` („Mannschaftsbus", 8 Plätze, Standort
+    Oberndorf, isBus) – ohne Seed-Angebot, also per Default nicht verfügbar.
+  - `app/page.tsx`: Bus überall 🚌-markiert und amber-farben hervorgehoben
+    (Elternliste, Angebot-Chips inkl. „nicht verfügbar"-Hinweis,
+    Fahrtkarten, Statistik); Sitzplatz-Feld erlaubt beim Bus bis 20.
+  - Logik: Hinfahrt-Startort-Regel gilt auch für den Bus (fährt ab
+    Oberndorf); Rückfahrt ab Veranstaltungsort für alle Fahrer inkl. Bus.
+  - Commits direkt auf `main` deployt (GitHub Pages).

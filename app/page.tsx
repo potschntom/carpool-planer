@@ -345,17 +345,18 @@ export default function Home() {
           <h2 className="font-semibold mb-2">👤 Elternteile</h2>
           <ul className="mb-3 space-y-1 text-sm">
             {s.parents.map((p) => (
-              <li key={p.id} className="flex justify-between items-center">
+              <li key={p.id} className={`flex justify-between items-center rounded px-1 ${p.isBus ? "bg-amber-50" : ""}`}>
                 <span>
-                  {p.name}
-                  {p.homeLocationId && <span className="text-slate-400"> ({locationById.get(p.homeLocationId)?.name})</span>}
+                  {p.isBus ? "🚌 " : ""}{p.name}
+                  {p.isBus && <span className="text-amber-700 text-xs"> – nur bei Verfügbarkeit</span>}
+                  {!p.isBus && p.homeLocationId && <span className="text-slate-400"> ({locationById.get(p.homeLocationId)?.name})</span>}
                 </span>
                 <span className="flex items-center gap-1">
                   <label className="text-xs text-slate-500">Freie Plätze:</label>
                   <input
                     type="number"
                     min={0}
-                    max={9}
+                    max={p.isBus ? 20 : 9}
                     value={p.seats}
                     onChange={(e) => updateSeats(p.id, Number(e.target.value))}
                     className="w-14 border rounded p-1 text-xs"
@@ -609,7 +610,15 @@ export default function Home() {
                           return (
                             <label
                               key={p.id}
-                              className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${on ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600"}`}
+                              className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${
+                                on
+                                  ? p.isBus
+                                    ? "bg-amber-500 text-white border-amber-500"
+                                    : "bg-green-600 text-white border-green-600"
+                                  : p.isBus
+                                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                                    : "bg-white text-slate-600"
+                              }`}
                             >
                               <input
                                 type="checkbox"
@@ -617,7 +626,8 @@ export default function Home() {
                                 checked={on}
                                 onChange={() => toggleOffer(p.id, event.id, direction)}
                               />
-                              {p.name}
+                              {p.isBus ? "🚌 " : ""}{p.name}
+                              {p.isBus && !on && <span className="opacity-70"> (nicht verfügbar)</span>}
                             </label>
                           );
                         })}
@@ -642,10 +652,11 @@ export default function Home() {
                             const driver = parentById.get(t.driverId);
                             const used = t.passengerChildIds.length;
                             const over = driver && used > driver.seats;
+                            const isBus = driver?.isBus;
                             return (
-                              <li key={tripIndex} className={`text-sm flex items-center justify-between gap-2 flex-wrap rounded px-2 py-1 ${over ? "bg-red-100" : "bg-white"}`}>
+                              <li key={tripIndex} className={`text-sm flex items-center justify-between gap-2 flex-wrap rounded px-2 py-1 ${over ? "bg-red-100" : isBus ? "bg-amber-50 border border-amber-300" : "bg-white"}`}>
                                 <span>
-                                  <span className="font-medium">{driver?.name ?? "?"}</span> fährt{" "}
+                                  <span className="font-medium">{isBus ? "🚌 " : ""}{driver?.name ?? "?"}</span> fährt{" "}
                                   {t.direction === "outbound" ? (
                                     <>von {(startLocName(t))} </>
                                   ) : (
@@ -741,8 +752,8 @@ export default function Home() {
           </thead>
           <tbody>
             {driverStats(s).map(({ parent, outbound, return: ret, total }) => (
-              <tr key={parent.id} className="border-t">
-                <td className="py-1">{parent.name}</td>
+              <tr key={parent.id} className={`border-t ${parent.isBus ? "bg-amber-50 text-amber-800" : ""}`}>
+                <td className="py-1">{parent.isBus ? "🚌 " : ""}{parent.name}</td>
                 <td className="py-1">{outbound}</td>
                 <td className="py-1">{ret}</td>
                 <td className="py-1 font-medium">{total}</td>
