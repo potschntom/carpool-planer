@@ -101,9 +101,9 @@ export function findConflicts(store: Store, trips: Trip[]): Conflict[] {
 export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { childId: string; eventId: string; direction: Direction; reason: string }[] } {
   const trips: Trip[] = [];
   const unassigned: { childId: string; eventId: string; direction: Direction; reason: string }[] = [];
-  const parentById = new Map(store.parents.map((p) => [p.id, p]));
   const driverLoad = new Map<string, number>();
-  const driverTrips = new Map<string, Trip[]>();
+  const childByIdMap = new Map(store.children.map((c) => [c.id, c]));
+  const parentById = new Map(store.parents.map((p) => [p.id, p]));
 
   for (const event of [...store.events].sort((a, b) => a.date.localeCompare(b.date))) {
     const participants = store.participations
@@ -112,35 +112,57 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
     if (participants.length === 0) continue;
 
     for (const direction of ["outbound", "return"] as Direction[]) {
-      let remaining = [...participants];
-      const candidates = [...store.parents].sort(
-        (a, b) => (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0)
-      );
-
-      for (const driver of candidates) {
-        if (remaining.length === 0) break;
-        const ownChildInCar = remaining.some((cid) => store.children.find((c) => c.id === cid)?.parentId === driver.id);
-        const seatsForPassengers = Math.max(0, driver.seats - (ownChildInCar ? 1 : 0));
-        if (seatsForPassengers === 0) continue;
-        const take = remaining.slice(0, seatsForPassengers);
-        if (take.length === 0) continue;
-
-        const trip: Trip = { eventId: event.id, direction, driverId: driver.id, passengerChildIds: take };
-        trips.push(trip);
-        remaining = remaining.slice(take.length);
-        driverLoad.set(driver.id, (driverLoad.get(driver.id) ?? 0) + 1);
-        const arr = driverTrips.get(driver.id) ?? [];
-        arr.push(trip);
-        driverTrips.set(driver.id, arr);
+      // Kinder nach Startort gruppieren: ein Fahrer fährt nur Kinder von einem Startort
+      const byStart = new Map<string, string[]>();
+      for (const cid of participants) {
+        const child = childByIdMap.get(cid);
+        const start =
+          direction === "outbound"
+            ? child?.homeLocationId ?? "ohne-ort"
+            : event.locationId;
+        const arr = byStart.get(start) ?? [];
+        arr.push(cid);
+        byStart.set(start, arr);
       }
 
-      for (const cid of remaining) {
-        unassigned.push({
-          childId: cid,
-          eventId: event.id,
-          direction,
-          reason: "Keine freien Plätze mehr",
+      const startGroups = [...byStart.entries()];
+
+      for (const [startLocationId, kidsAtStart] of startGroups) {
+        let remaining = [...kidsAtStart];
+
+        // Bevorzugt Fahrer, die am selben Startort wohnen, danach allgemein Lastenausgleich
+        const candidates = [...store.parents].sort((a, b) => {
+          const aLocal = a.homeLocationId === startLocationId ? 0 : 1;
+          const bLocal = b.homeLocationId === startLocationId ? 0 : 1;
+          if (aLocal !== bLocal) return aLocal - bLocal;
+          return (driverLoad.get(a.id) ?? 0) - (driverLoad.get(b.id) ?? 0);
         });
+
+        for (const driver of candidates) {
+          if (remaining.length === 0) break;
+          const ownChildInCar = remaining.some(
+            (cid) => childByIdMap.get(cid)?.parentId === driver.id
+          );
+          const seatsForPassengers = Math.max(0, driver.seats - (ownChildInCar ? 1 : 0));
+          if (seatsForPassengers === 0) continue;
+          const take = remaining.slice(0, seatsForPassengers);
+          if (take.length === 0) continue;
+
+          trips.push({ eventId: event.id, direction, driverId: driver.id, passengerChildIds: take });
+          remaining = remaining.slice(take.length);
+          driverLoad.set(driver.id, (driverLoad.get(driver.id) ?? 0) + 1);
+        }
+
+        const startName =
+          store.locations.find((l) => l.id === startLocationId)?.name ?? "unbekanntem Ort";
+        for (const cid of remaining) {
+          unassigned.push({
+            childId: cid,
+            eventId: event.id,
+            direction,
+            reason: `Keine freien Plätze mehr ab ${startName}`,
+          });
+        }
       }
     }
   }

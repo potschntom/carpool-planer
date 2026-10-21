@@ -155,6 +155,17 @@ export default function Home() {
     });
   }
 
+  function startLocName(t: (typeof s.trips)[number]): string {
+    let locId: string | undefined;
+    if (t.direction === "return") {
+      locId = s.events.find((e) => e.id === t.eventId)?.locationId;
+    } else {
+      const firstChild = t.passengerChildIds[0];
+      locId = s.children.find((c) => c.id === firstChild)?.homeLocationId;
+    }
+    return s.locations.find((l) => l.id === locId)?.name ?? "?";
+  }
+
   function autoPlan() {
     const { trips, unassigned: una } = autoAssignTrips(s);
     save({ ...s, trips });
@@ -383,7 +394,13 @@ export default function Home() {
                             return (
                               <li key={tripIndex} className={`text-sm flex items-center justify-between gap-2 flex-wrap rounded px-2 py-1 ${over ? "bg-red-100" : "bg-white"}`}>
                                 <span>
-                                  <span className="font-medium">{driver?.name ?? "?"}</span> fährt mit{" "}
+                                  <span className="font-medium">{driver?.name ?? "?"}</span> fährt{" "}
+                                  {t.direction === "outbound" ? (
+                                    <>von {(startLocName(t))} </>
+                                  ) : (
+                                    <>vom {(loc?.name ?? "?")} </>
+                                  )}
+                                  mit{" "}
                                   {t.passengerChildIds.map((cid) => childMap.get(cid)?.name ?? "?").join(", ")}
                                   {driver && <span className="text-slate-400"> ({used}/{driver.seats} Plätze)</span>}
                                 </span>
