@@ -14,7 +14,8 @@ function isValidStore(value: any): value is Store {
     Array.isArray(value.children) &&
     Array.isArray(value.events) &&
     Array.isArray(value.participations) &&
-    Array.isArray(value.trips)
+    Array.isArray(value.trips) &&
+    Array.isArray(value.offers ?? [])
   );
 }
 

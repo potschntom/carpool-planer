@@ -48,6 +48,12 @@ export type Trip = {
   passengerChildIds: string[];
 };
 
+export type AvailabilityOffer = {
+  parentId: string;
+  eventId: string;
+  direction: Direction;
+};
+
 export type Store = {
   locations: Location[];
   parents: Parent[];
@@ -55,6 +61,7 @@ export type Store = {
   events: Event[];
   participations: Participation[];
   trips: Trip[];
+  offers: AvailabilityOffer[];
 };
 
 export type Conflict = {

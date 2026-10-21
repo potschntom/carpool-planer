@@ -127,11 +127,20 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
       for (const [startLocationId, kidsAtStart] of byStart.entries()) {
         let remaining = [...kidsAtStart];
 
+        // Nur Eltern, die diese Fahrt aktiv angeboten haben („ich kann diese Fahrt machen“)
+        const offeredParentIds = new Set(
+          store.offers
+            .filter((o) => o.eventId === event.id && o.direction === direction)
+            .map((o) => o.parentId)
+        );
+
         // Fahrer, die von diesem Startort aus fahren KÖNNEN:
         // bei Hinfahrt nur Eltern mit Wohnort = Startort,
         // bei Rückfahrt alle Eltern (Start ist der Trainingsplatz)
-        const eligible = store.parents.filter((p) =>
-          direction === "return" ? true : p.homeLocationId === startLocationId
+        const eligible = store.parents.filter(
+          (p) =>
+            offeredParentIds.has(p.id) &&
+            (direction === "return" || p.homeLocationId === startLocationId)
         );
 
         // Priorität: 1) muss ohnehin fahren (eigenes Kind nimmt teil)
@@ -168,8 +177,8 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
             direction,
             reason:
               direction === "outbound"
-                ? `Kein Fahrer mit freien Plätzen ab ${startName} verfügbar – Kind kann nicht von woanders zugeordnet werden`
-                : `Keine freien Plätze für die Rückfahrt ab ${startName}`,
+                ? `Kein Fahrer ab ${startName} hat diese Hinfahrt angeboten – Kind kann nicht von woanders zugeordnet werden`
+                : `Kein Fahrer hat diese Rückfahrt ab ${startName} angeboten bzw. freie Plätze`,
           });
         }
       }

@@ -35,6 +35,12 @@ export function seedStore(): Store {
       { childId: "c6", eventId: "e2" },
     ],
     trips: [],
+    offers: [
+      { parentId: "p1", eventId: "e1", direction: "outbound" },
+      { parentId: "p2", eventId: "e1", direction: "return" },
+      { parentId: "p3", eventId: "e2", direction: "outbound" },
+      { parentId: "p3", eventId: "e2", direction: "return" },
+    ],
   };
 }
 

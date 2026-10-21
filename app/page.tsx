@@ -166,6 +166,20 @@ export default function Home() {
     return s.locations.find((l) => l.id === locId)?.name ?? "?";
   }
 
+  function toggleOffer(parentId: string, eventId: string, direction: Direction) {
+    const has = s.offers.some(
+      (o) => o.parentId === parentId && o.eventId === eventId && o.direction === direction
+    );
+    save({
+      ...s,
+      offers: has
+        ? s.offers.filter(
+            (o) => !(o.parentId === parentId && o.eventId === eventId && o.direction === direction)
+          )
+        : [...s.offers, { parentId, eventId, direction }],
+    });
+  }
+
   function autoPlan() {
     const { trips, unassigned: una } = autoAssignTrips(s);
     save({ ...s, trips });
@@ -377,10 +391,35 @@ export default function Home() {
 
                 {(["outbound", "return"] as Direction[]).map((direction) => {
                   const dirTrips = eventTrips.filter((t) => t.direction === direction);
+                  const offeredIds = new Set(
+                    s.offers
+                      .filter((o) => o.eventId === event.id && o.direction === direction)
+                      .map((o) => o.parentId)
+                  );
                   return (
                     <div key={direction} className="mt-3">
                       <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                         {direction === "outbound" ? "→ Hinfahrt" : "← Rückfahrt"}
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        <span className="text-xs text-slate-500 self-center">Ich kann diese Fahrt machen:</span>
+                        {s.parents.map((p) => {
+                          const on = offeredIds.has(p.id);
+                          return (
+                            <label
+                              key={p.id}
+                              className={`text-xs border rounded-full px-3 py-1 cursor-pointer ${on ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600"}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="hidden"
+                                checked={on}
+                                onChange={() => toggleOffer(p.id, event.id, direction)}
+                              />
+                              {p.name}
+                            </label>
+                          );
+                        })}
                       </div>
                       {dirTrips.length === 0 ? (
                         <p className="text-xs text-slate-400">Noch nicht geplant.</p>
