@@ -15,6 +15,7 @@ export default function Home() {
   const [msg, setMsg] = useState("");
   const [tab, setTab] = useState<"plan" | "data" | "stats">("plan");
   const [openEvents, setOpenEvents] = useState<Set<string>>(new Set());
+  const [alertsOpen, setAlertsOpen] = useState(false);
 
   useEffect(() => {
     if (loaded) {
@@ -320,23 +321,35 @@ export default function Home() {
       {msg && <div className="bg-red-100 border border-red-300 text-red-800 rounded p-3">{msg}</div>}
 
       {missingSpots.length > 0 && (
-        <div className="bg-red-600 text-white rounded p-4 shadow-md" role="alert">
-          <div className="font-bold mb-1">
-            ⚠️ {missingSpots.length} Kind{missingSpots.length > 1 ? "er" : ""} ohne Platz!
-          </div>
-          <ul className="text-sm list-disc pl-5">
-            {missingSpots.map((m, i) => {
-              const ev = s.events.find((e) => e.id === m.eventId);
-              return (
-                <li key={i}>
-                  <span className="font-medium">{childMap.get(m.childId)?.name ?? "?"}</span>{" "}
-                  → {ev?.title ?? "?"} ({formatDateDE(ev?.date ?? "")}, {ev?.startTime}) ·{" "}
-                  {m.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}
-                </li>
-              );
-            })}
-          </ul>
-          <div className="text-xs mt-1 opacity-90">Rot markierte Kinder im Termin brauchen noch eine Fahrt.</div>
+        <div className="bg-red-600 text-white rounded shadow-md" role="alert">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between gap-2 p-3 text-left"
+            onClick={() => setAlertsOpen(!alertsOpen)}
+            aria-expanded={alertsOpen}
+          >
+            <span className="font-bold">
+              ⚠️ {missingSpots.length} Kind{missingSpots.length > 1 ? "er" : ""} ohne Platz!
+            </span>
+            <span className="text-sm opacity-90">{alertsOpen ? "▲" : "▼"}</span>
+          </button>
+          {alertsOpen && (
+            <div className="px-4 pb-3">
+              <ul className="text-sm list-disc pl-5">
+                {missingSpots.map((m, i) => {
+                  const ev = s.events.find((e) => e.id === m.eventId);
+                  return (
+                    <li key={i}>
+                      <span className="font-medium">{childMap.get(m.childId)?.name ?? "?"}</span>{" "}
+                      → {ev?.title ?? "?"} ({formatDateDE(ev?.date ?? "")}, {ev?.startTime}) ·{" "}
+                      {m.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="text-xs mt-1 opacity-90">Rot markierte Kinder im Termin brauchen noch eine Fahrt.</div>
+            </div>
+          )}
         </div>
       )}
 
