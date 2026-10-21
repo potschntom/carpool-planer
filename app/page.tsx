@@ -13,6 +13,8 @@ export default function Home() {
     { childId: string; eventId: string; direction: Direction; reason: string }[]
   >([]);
   const [msg, setMsg] = useState("");
+  const [tab, setTab] = useState<"plan" | "data" | "stats">("plan");
+  const [openEvents, setOpenEvents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (loaded) {
@@ -254,6 +256,21 @@ export default function Home() {
     setUnassigned(una);
   }
 
+  function toggleEventOpen(eventId: string) {
+    setOpenEvents((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      return next;
+    });
+  }
+
+  const TABS: { id: "plan" | "data" | "stats"; label: string; icon: string }[] = [
+    { id: "plan", label: "Termine & Planung", icon: "📅" },
+    { id: "data", label: "Stammdaten", icon: "👥" },
+    { id: "stats", label: "Übersicht", icon: "📊" },
+  ];
+
   function removeTrip(index: number) {
     save({ ...s, trips: s.trips.filter((_, i) => i !== index) });
   }
@@ -323,6 +340,29 @@ export default function Home() {
         </div>
       )}
 
+      <nav className="flex gap-1 border-b overflow-x-auto" role="tablist">
+        {TABS.map(({ id, label, icon }) => {
+          const badge =
+            id === "plan" && missingSpots.length > 0 ? ` (${missingSpots.length}🔴)` : "";
+          return (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-t-lg border-b-2 -mb-px transition-colors ${
+                tab === id
+                  ? "bg-white border-slate-800 text-slate-900"
+                  : "bg-transparent border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              {icon} {label}{badge}
+            </button>
+          );
+        })}
+      </nav>
+
+      {tab === "data" && (
       <section className="grid md:grid-cols-3 gap-6">
         <div className="border rounded p-4 bg-white shadow-sm">
           <h2 className="font-semibold mb-2">📍 Orte</h2>
@@ -449,8 +489,10 @@ export default function Home() {
           </form>
         </div>
       </section>
+      )}
 
-      <section className="border rounded p-4 bg-white shadow-sm space-y-4">
+      {tab === "plan" && (
+      <section className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-semibold">📅 Termine</h2>
           <button onClick={autoPlan} className="bg-blue-600 text-white rounded px-4 py-2 text-sm hover:bg-blue-500">
@@ -469,9 +511,16 @@ export default function Home() {
             );
             const eventTrips = s.trips.filter((t) => t.eventId === event.id);
             const loc = locationById.get(event.locationId);
+            const missingHere = missingSpots.filter((m) => m.eventId === event.id);
+            const isOpen = openEvents.has(event.id);
             return (
-              <div key={event.id} className="border rounded p-4 bg-slate-50">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div key={event.id} className={`border rounded bg-slate-50 ${missingHere.length > 0 ? "border-red-300" : "border-slate-200"}`}>
+                <button
+                  type="button"
+                  className="w-full flex items-start justify-between gap-2 flex-wrap p-4 text-left hover:bg-slate-100 rounded"
+                  onClick={() => toggleEventOpen(event.id)}
+                  aria-expanded={isOpen}
+                >
                   <div>
                     <div className="font-medium">
                       {event.type === "match" ? "🏆" : "⚽"} {event.title}
@@ -485,9 +534,35 @@ export default function Home() {
                       {weekdayName(event.date)}, {formatDateDE(event.date)} · {event.startTime}–{event.endTime}
                       {loc && <> · {loc.name}{event.meetingPoint ? ` (Treffpunkt: ${event.meetingPoint})` : loc.meetingPoint ? ` (Treffpunkt: ${loc.meetingPoint})` : ""}</>}
                     </div>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      <span className="text-xs bg-slate-200 text-slate-700 rounded-full px-2 py-0.5" title="Teilnehmende Kinder">
+                        👥 {participants.length}
+                      </span>
+                      {missingHere.length > 0 && (
+                        <span className="text-xs bg-red-600 text-white rounded-full px-2 py-0.5 font-medium">
+                          🔴 {missingHere.length} ohne Platz
+                        </span>
+                      )}
+                      {eventTrips.length > 0 && missingHere.length === 0 && (
+                        <span className="text-xs bg-emerald-100 text-emerald-800 rounded-full px-2 py-0.5">
+                          ✓ geplant ({eventTrips.length} Fahrten)
+                        </span>
+                      )}
+                      {eventTrips.length === 0 && missingHere.length === 0 && participants.length > 0 && (
+                        <span className="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">
+                          ⏳ noch nicht geplant
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  <span className="text-slate-400 text-sm shrink-0 self-center">{isOpen ? "▲" : "▼"}</span>
+                </button>
+
+                {isOpen && (
+                <>
+                <div className="flex justify-end px-2">
                   <button
-                    className="text-red-500 hover:underline text-sm"
+                    className="text-red-500 hover:underline text-xs"
                     onClick={() =>
                       save({
                         ...s,
@@ -497,7 +572,7 @@ export default function Home() {
                       })
                     }
                   >
-                    löschen
+                    Termin löschen
                   </button>
                 </div>
 
@@ -705,6 +780,8 @@ export default function Home() {
                     </div>
                   );
                 })}
+                </>
+                )}
               </div>
             );
           })}
@@ -738,7 +815,9 @@ export default function Home() {
           </form>
         </details>
       </section>
+      )}
 
+      {tab === "stats" && (
       <section className="border rounded p-4 bg-white shadow-sm space-y-2">
         <h2 className="font-semibold">📊 Fahrer-Statistik</h2>
         <table className="text-sm w-full max-w-md">
@@ -765,8 +844,9 @@ export default function Home() {
           Die Statistik hilft, die Fahrten fair zu verteilen – „Automatisch planen" berücksichtigt die bisherige Last automatisch.
         </p>
       </section>
+      )}
 
-      {(unassigned.length > 0 || conflicts.length > 0) && (
+      {tab === "stats" && (unassigned.length > 0 || conflicts.length > 0) && (
         <section className="space-y-3">
           {unassigned.length > 0 && (
             <div className="bg-amber-50 border border-amber-300 rounded p-3 text-sm">

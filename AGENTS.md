@@ -71,3 +71,17 @@ Daten im localStorage (`lib/useStore.ts`, Storage-Key `carpool-planer-store-v3`)
   - Logik: Hinfahrt-Startort-Regel gilt auch für den Bus (fährt ab
     Oberndorf); Rückfahrt ab Veranstaltungsort für alle Fahrer inkl. Bus.
   - Commits direkt auf `main` deployt (GitHub Pages).
+- 2026-10-21 (Session „3-Tab-UX“):
+  - `app/page.tsx` umstrukturiert: bisherige „Wurstseite“ in 3 Tabs
+    aufgeteilt – 📅 Termine & Planung (Default), 👥 Stammdaten
+    (Orte/Eltern/Kinder inkl. Bus), 📊 Übersicht (Fahrer-Statistik +
+    Unassigned-/Konfliktlisten).
+  - Termine sind zugeklappte Karten: Titel/Datum/Ort + Status-Badges
+    (👥 Teilnehmerzahl, 🔴 N ohne Platz, ✓ geplant (N Fahrten),
+    ⏳ noch nicht geplant); Klick auf die Karte klappt Details auf
+    (`openEvents`-State, Löschen-Button nur im aufgeklappten Zustand).
+  - Tab-Navigation mit Badge („N 🔴“ im Plan-Tab, wenn Kinder ohne Platz).
+  - Rotes Warnbanner bleibt global unter dem Header sichtbar.
+  - Verifikation: `npx tsc --noEmit`, `npx tsx scripts/smoke.ts`,
+    `NODE_ENV=production npx next build` – alle grün.
+  - Commits direkt auf `main` deployt (GitHub Pages).
