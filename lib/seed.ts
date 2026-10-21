@@ -9,9 +9,9 @@ export function seedStore(): Store {
       { id: "l4", name: "Platz Ostdorf", meetingPoint: "An der alten Mühle" },
     ],
     parents: [
-      { id: "p1", name: "Anna Schmidt", phone: "0151 11111111", seats: 4, homeLocationId: "l1" },
+      { id: "p1", name: "Anna Schmidt", phone: "0151 11111111", seats: 3, homeLocationId: "l1" },
       { id: "p2", name: "Ben Meyer", phone: "0152 22222222", seats: 3, homeLocationId: "l2" },
-      { id: "p3", name: "Clara Weber", phone: "0153 33333333", seats: 5, homeLocationId: "l3" },
+      { id: "p3", name: "Clara Weber", phone: "0153 33333333", seats: 4, homeLocationId: "l3" },
       { id: "p4", name: "Dirk Klein", phone: "0154 44444444", seats: 2, homeLocationId: "l4" },
     ],
     children: [

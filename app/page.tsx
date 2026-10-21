@@ -60,8 +60,8 @@ export default function Home() {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const name = String(form.get("name") ?? "").trim();
-    const seats = Number(form.get("seats") ?? 4);
-    if (!name || !Number.isFinite(seats) || seats < 1) {
+    const seats = Number(form.get("seats") ?? 3);
+    if (!name || !Number.isFinite(seats) || seats < 0) {
       setMsg("Name und mindestens 1 Sitzplatz erforderlich.");
       return;
     }
@@ -84,7 +84,7 @@ export default function Home() {
   function updateSeats(parentId: string, seats: number) {
     save({
       ...s,
-      parents: s.parents.map((p) => (p.id === parentId ? { ...p, seats: Math.max(1, seats) } : p)),
+      parents: s.parents.map((p) => (p.id === parentId ? { ...p, seats: Math.max(0, seats) } : p)),
     });
   }
 
@@ -248,10 +248,10 @@ export default function Home() {
                   {p.homeLocationId && <span className="text-slate-400"> ({locationById.get(p.homeLocationId)?.name})</span>}
                 </span>
                 <span className="flex items-center gap-1">
-                  <label className="text-xs text-slate-500">Plätze:</label>
+                  <label className="text-xs text-slate-500">Freie Plätze:</label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={9}
                     value={p.seats}
                     onChange={(e) => updateSeats(p.id, Number(e.target.value))}
@@ -265,7 +265,7 @@ export default function Home() {
             <input name="name" placeholder="Name" required className="w-full border rounded p-2 text-sm" />
             <input name="phone" placeholder="Telefon (optional)" className="w-full border rounded p-2 text-sm" />
             <div className="grid grid-cols-2 gap-2">
-              <input name="seats" type="number" min={1} max={9} placeholder="Plätze" defaultValue={4} className="w-full border rounded p-2 text-sm" />
+              <input name="seats" type="number" min={0} max={9} placeholder="Freie Plätze" defaultValue={3} className="w-full border rounded p-2 text-sm" />
               <select name="homeLocationId" className="w-full border rounded p-2 text-sm">
                 <option value="">Wohnort</option>
                 {s.locations.map((l) => (
@@ -389,7 +389,7 @@ export default function Home() {
                           {dirTrips.map((t) => {
                             const tripIndex = s.trips.indexOf(t);
                             const driver = parentById.get(t.driverId);
-                            const used = t.passengerChildIds.length + 1;
+                            const used = t.passengerChildIds.length;
                             const over = driver && used > driver.seats;
                             return (
                               <li key={tripIndex} className={`text-sm flex items-center justify-between gap-2 flex-wrap rounded px-2 py-1 ${over ? "bg-red-100" : "bg-white"}`}>
@@ -402,7 +402,7 @@ export default function Home() {
                                   )}
                                   mit{" "}
                                   {t.passengerChildIds.map((cid) => childMap.get(cid)?.name ?? "?").join(", ")}
-                                  {driver && <span className="text-slate-400"> ({used}/{driver.seats} Plätze)</span>}
+                                  {driver && <span className="text-slate-400"> ({used}/{driver.seats} freie Plätze belegt)</span>}
                                 </span>
                                 <span className="flex items-center gap-2">
                                   <select

@@ -45,10 +45,10 @@ export function findConflicts(store: Store, trips: Trip[]): Conflict[] {
     const e = eventById.get(t.eventId);
     const driver = parentById.get(t.driverId);
     if (!e || !driver) continue;
-    if (t.passengerChildIds.length + 1 > driver.seats) {
+    if (t.passengerChildIds.length > driver.seats) {
       conflicts.push({
         type: "capacity_exceeded",
-        description: `Fahrer ${driver.name} hat nur ${driver.seats} Plätze, aber ${t.passengerChildIds.length + 1} Personen in der Fahrt zu „${e.title}“ (${t.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}).`,
+        description: `Fahrer ${driver.name} hat nur ${driver.seats} freie Plätze, aber ${t.passengerChildIds.length} Kinder in der Fahrt zu „${e.title}“ (${t.direction === "outbound" ? "Hinfahrt" : "Rückfahrt"}).`,
       });
     }
   }
@@ -140,10 +140,7 @@ export function autoAssignTrips(store: Store): { trips: Trip[]; unassigned: { ch
 
         for (const driver of candidates) {
           if (remaining.length === 0) break;
-          const ownChildInCar = remaining.some(
-            (cid) => childByIdMap.get(cid)?.parentId === driver.id
-          );
-          const seatsForPassengers = Math.max(0, driver.seats - (ownChildInCar ? 1 : 0));
+          const seatsForPassengers = driver.seats;
           if (seatsForPassengers === 0) continue;
           const take = remaining.slice(0, seatsForPassengers);
           if (take.length === 0) continue;
